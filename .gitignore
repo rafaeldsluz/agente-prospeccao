@@ -1,0 +1,27 @@
+# Ambiente virtual
+venv/
+.venv/
+
+# Variáveis de ambiente (contém chaves secretas)
+.env
+
+# Banco de dados e logs gerados em runtime
+data/
+logs/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Arquivos temporários
+*.tmp
+*.png
+!assets/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
