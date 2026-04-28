@@ -64,6 +64,58 @@ Retorne APENAS o texto da mensagem, sem explicações adicionais.
         return _mensagem_template(nome, nicho, cidade, servico_ofertado)
 
 
+def gerar_mensagem_followup(nome: str, nicho: str, cidade: str, numero: int = 1) -> str:
+    """Gera mensagem de follow-up (1 ou 2) para empresa sem resposta."""
+    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "sua_chave_aqui":
+        return _template_followup(nome, nicho, cidade, numero)
+
+    angulos = {
+        1: "Faça um follow-up gentil, diferente da mensagem anterior. Mencione um benefício específico "
+           "do site para o nicho deles (ex: aparecer no Google, atrair clientes enquanto dormem). "
+           "Tom curioso e descontraído.",
+        2: "Segundo e último follow-up. Use prova social (outras empresas do mesmo nicho já têm site) "
+           "e crie senso de oportunidade (oferta por tempo limitado ou vagas limitadas). "
+           "Tom mais direto, mas ainda respeitoso.",
+    }
+
+    prompt = f"""
+Crie uma mensagem de follow-up #{numero} para uma empresa que não respondeu sua proposta de criação de site.
+
+- Nome do negócio: {nome}
+- Nicho: {nicho}
+- Cidade: {cidade}
+- Instrução de abordagem: {angulos.get(numero, angulos[1])}
+
+Máximo 3 linhas. Retorne APENAS o texto da mensagem.
+"""
+    try:
+        client = _get_client()
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            system=PROMPT_SISTEMA,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception as e:
+        logger.warning(f"Claude indisponível para follow-up ({e})")
+        return _template_followup(nome, nicho, cidade, numero)
+
+
+def _template_followup(nome: str, nicho: str, cidade: str, numero: int) -> str:
+    if numero == 1:
+        return (
+            f"Oi *{nome}*, tudo bem? Queria saber se viram a pré-visualização do site que enviei. "
+            f"Empresas de {nicho} com site próprio aparecem no Google e atraem clientes mesmo fora do horário. "
+            f"Posso tirar dúvidas rapidinho? 😊"
+        )
+    return (
+        f"Olá *{nome}*! Última mensagem, prometo 😄 "
+        f"Tenho ajudado vários negócios de {nicho} em {cidade} a conseguir clientes pelo digital. "
+        f"Se quiser, posso mostrar exemplos reais em 5 minutos. É sem compromisso!"
+    )
+
+
 def gerar_mensagem_oferta_site(nome: str, nicho: str, cidade: str) -> str:
     """Gera mensagem de oferta de criação de site para empresa sem website."""
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "sua_chave_aqui":

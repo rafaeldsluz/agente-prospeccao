@@ -24,6 +24,11 @@ _PALETAS = {
     "contabil":    {"pri": (40,  50, 80),  "sec": (180, 155, 100),"dark": (12, 15, 25)},
     "pet":         {"pri": (60, 150,  90), "sec": (120, 220, 140),"dark": (10, 22, 15)},
     "escola":      {"pri": (90,  60, 190), "sec": (150, 120, 240),"dark": (15, 10, 35)},
+    "concession":  {"pri": (20,  20,  20), "sec": (200, 160,  0), "dark": ( 5,  5,  5)},
+    "revenda":     {"pri": (20,  20,  20), "sec": (200, 160,  0), "dark": ( 5,  5,  5)},
+    "automovel":   {"pri": (20,  20,  20), "sec": (200, 160,  0), "dark": ( 5,  5,  5)},
+    "veiculo":     {"pri": (20,  20,  20), "sec": (200, 160,  0), "dark": ( 5,  5,  5)},
+    "moto":        {"pri": (180, 30,  30), "sec": (240, 100,  0), "dark": (15,  5,  5)},
     "default":     {"pri": (55,  95, 215), "sec": ( 0, 200, 170), "dark": (10, 14, 30)},
 }
 
@@ -41,6 +46,11 @@ _HEADLINES = {
     "contabil":    ("Sua empresa em ordem",          "Contabilidade especializada para seu negocio"),
     "pet":         ("Amor e cuidado para seu pet",   "Servicos completos de saude e bem-estar animal"),
     "escola":      ("Educacao que transforma",       "Metodologia moderna para o futuro dos seus filhos"),
+    "concession":  ("Seu proximo carro esta aqui",   "Os melhores veiculos com as melhores condicoes"),
+    "revenda":     ("Qualidade em cada detalhe",     "Veiculos selecionados com garantia e procedencia"),
+    "automovel":   ("Dirija o carro dos seus sonhos","Financiamento facilitado e entrega rapida"),
+    "veiculo":     ("Seu proximo carro esta aqui",   "Os melhores veiculos com as melhores condicoes"),
+    "moto":        ("Liberdade sobre duas rodas",    "As melhores motos com condicoes exclusivas"),
     "default":     ("Bem-vindo ao nosso espaco",     "Qualidade e excelencia em cada detalhe"),
 }
 
@@ -52,7 +62,10 @@ _FEATURES = {
     "dentista":    [("Limpeza",           "Profilaxia completa"),    ("Ortodontia",      "Alinhamento dental"),("Clareamento",     "Sorriso perfeito")],
     "advogado":    [("Consultoria",       "Analise do seu caso"),    ("Defesa Civel",    "Seus direitos"),     ("Trabalhista",     "Protecao total")],
     "pet":         [("Veterinario",       "Saude do seu pet"),       ("Banho & Tosa",    "Bem-estar animal"),  ("Hotel Pet",       "Cuidado 24h")],
-    "default":     [("Qualidade",         "Servicos premium"),       ("Atendimento",     "Equipe dedicada"),   ("Contato",         "Sempre disponivel")],
+    "concession":  [("Estoque Amplo",     "Carros para todo perfil"), ("Financiamento",   "Parcelas que cabem"), ("Revisados",        "Garantia total")],
+    "revenda":     [("Estoque Amplo",     "Carros para todo perfil"), ("Financiamento",   "Parcelas que cabem"), ("Revisados",        "Garantia total")],
+    "moto":        [("Estoque Completo",  "Motos de todas as marcas"),("Financiamento",   "Entrada facilitada"), ("Emplacamento",     "Fazemos por voce")],
+    "default":     [("Qualidade",         "Servicos premium"),        ("Atendimento",     "Equipe dedicada"),    ("Contato",          "Sempre disponivel")],
 }
 
 
@@ -110,7 +123,7 @@ def _draw_rounded_rect(draw: ImageDraw.ImageDraw, xy, radius: int, fill):
     draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=fill)
 
 
-def gerar_mockup_landing_page(nome: str, nicho: str, cidade: str = "") -> bytes:
+def gerar_mockup_landing_page(nome: str, nicho: str, cidade: str = "", logo_bytes: bytes = None) -> bytes:
     """
     Gera PNG de mockup de landing page profissional.
     Retorna bytes da imagem PNG.
@@ -146,8 +159,24 @@ def gerar_mockup_landing_page(nome: str, nicho: str, cidade: str = "") -> bytes:
     # ── Navbar ─────────────────────────────────────────────────
     NAV_Y0, NAV_Y1 = 45, 100
     draw.rectangle([(0, NAV_Y0), (W, NAV_Y1)], fill=dark)
-    # Logo text
-    draw.text((40, 62), nome_s.upper(), fill=sec, font=_font(24, bold=True))
+
+    # Logo real ou fallback texto
+    if logo_bytes:
+        try:
+            logo_img = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
+            logo_h = NAV_Y1 - NAV_Y0 - 14
+            ratio  = logo_h / logo_img.height
+            logo_w = int(logo_img.width * ratio)
+            logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
+            # Fundo branco atrás da logo para melhor visualização
+            bg = Image.new("RGBA", (logo_w + 10, logo_h + 4), (255, 255, 255, 200))
+            img.paste(bg, (35, NAV_Y0 + 7), bg)
+            img.paste(logo_img, (40, NAV_Y0 + 9), logo_img)
+        except Exception:
+            draw.text((40, 62), nome_s.upper(), fill=sec, font=_font(24, bold=True))
+    else:
+        draw.text((40, 62), nome_s.upper(), fill=sec, font=_font(24, bold=True))
+
     # Nav links
     for i, item in enumerate(["Inicio", "Servicos", "Sobre nos", "Contato"]):
         draw.text((680 + i * 140, 68), item, fill=(210, 215, 225), font=_font(14))

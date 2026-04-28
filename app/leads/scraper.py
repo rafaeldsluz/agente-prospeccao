@@ -17,15 +17,72 @@ HEADERS = lambda: {"User-Agent": ua.random, "Accept-Language": "pt-BR,pt;q=0.9"}
 
 # Principais cidades brasileiras para varredura rotativa
 NICHOS_GERAIS = [
-    "restaurante", "pizzaria", "lanchonete", "padaria", "mercado",
+    "restaurante", "pizzaria", "lanchonete", "padaria",
     "academia", "fisioterapia", "nutricionista",
     "salao de beleza", "barbearia", "estetica",
-    "clinica medica", "dentista", "psicólogo", "veterinario",
+    "clinica medica", "dentista", "psicologo", "veterinario",
     "advogado", "contabilidade", "imobiliaria",
-    "pet shop", "escola", "curso", "oficina mecanica",
-    "farmácia", "loja de roupas", "moveis", "eletrodomesticos",
-    "construcao civil", "encanador", "eletricista", "jardinagem",
+    "pet shop", "escola", "curso profissionalizante", "oficina mecanica",
+    "loja de roupas", "construcao civil", "eletricista", "jardinagem",
+    "concessionaria de veiculos", "revenda de carros", "loja de motos",
 ]
+
+# Nichos que claramente se beneficiam de landing page local
+NICHOS_VALIDOS_LANDING_PAGE = {
+    "restaurante", "pizzaria", "lanchonete", "churrascaria", "padaria",
+    "cafe", "sorveteria", "bar", "buffet",
+    "academia", "pilates", "crossfit", "fisioterapia", "nutricionista",
+    "salao de beleza", "barbearia", "estetica", "spa", "manicure",
+    "clinica", "dentista", "psicologo", "terapeuta", "veterinario", "pet",
+    "advogado", "advocacia", "contabilidade", "contador",
+    "escola", "curso", "faculdade", "coaching",
+    "imobiliaria", "corretor",
+    "oficina", "mecanica", "funilaria",
+    "eletricista", "encanador", "pintor", "pedreiro", "jardinagem",
+    "fotografia", "fotografo", "estudio",
+    "arquitetura", "designer", "agencia",
+    "moveis", "marcenaria", "decoracao",
+    "loja", "boutique", "moda", "mercadinho", "mercearia",
+    "papelaria", "livraria", "bazar", "armarinho", "ferragem",
+    "hortifruti", "acougue", "peixaria", "emporio",
+    "concessionaria", "revenda", "carros", "automoveis", "motos", "veiculos",
+    "hotel", "pousada", "hostel",
+    "turismo", "agencia de viagem",
+}
+
+# Palavras que indicam empresa grande / rede / atacado — não vale prospectar
+_PALAVRAS_GRANDES_REDES = {
+    "ltda", "s.a", "s/a", "grupo", "rede", "redes", "holding",
+    "atacado", "atacadista", "distribuidora", "distribuidores",
+    "industria", "industrias", "fabrica", "fabricante",
+    "nacional", "internacional", "global",
+    "banco", "financeira", "seguradora",
+    "hospital", "upa", "sus", "unimed", "hapvida", "amil",
+    "magazine", "casas bahia", "americanas", "submarino",
+    "mcdonalds", "burger king", "subway", "starbucks",
+}
+
+
+def empresa_vale_landing_page(nome: str, nicho: str) -> bool:
+    """
+    Retorna True se a empresa faz sentido receber uma proposta de landing page.
+    Filtra grandes redes, atacadistas e nichos sem apelo local.
+    """
+    nome_lower  = nome.lower()
+    nicho_lower = nicho.lower()
+
+    # Rejeita grandes redes / termos corporativos
+    for palavra in _PALAVRAS_GRANDES_REDES:
+        if palavra in nome_lower:
+            return False
+
+    # Verifica se o nicho tem potencial para landing page local
+    for valido in NICHOS_VALIDOS_LANDING_PAGE:
+        if valido in nicho_lower or valido in nome_lower:
+            return True
+
+    # Nicho específico informado pelo usuário: aceita (ele já escolheu)
+    return bool(nicho_lower and nicho_lower != "geral")
 
 CIDADES_BR = [
     "São Paulo", "Rio de Janeiro", "Belo Horizonte", "Salvador", "Fortaleza",

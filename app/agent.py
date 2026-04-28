@@ -4,8 +4,9 @@ Núcleo do agente: orquestra busca → geração de mensagem → envio → persi
 import logging
 import time
 from app import database as db
-from app.leads.scraper import buscar_leads
+from app.leads.scraper import buscar_leads, empresa_vale_landing_page
 from app.leads.website_checker import filtrar_sem_website
+from app.leads.logo_finder import buscar_logo
 from app.design.generator import gerar_mensagem_whatsapp, gerar_mensagem_oferta_site
 from app.design.landing_page_generator import gerar_mockup_landing_page
 from app.messaging.sender import enviar_whatsapp, enviar_imagem_whatsapp
@@ -105,7 +106,7 @@ def executar_ciclo(nicho=None, cidade=None, max_leads=None, canal=None, callback
     return resumo
 
 
-def executar_ciclo_sites(nicho=None, cidade=None, max_leads=None, callback=None) -> dict:
+def executar_ciclo_sites(nicho=None, cidade=None, max_leads=None, callback=None, mensagem_custom=None) -> dict:
     """
     Ciclo de prospecção de sites:
     1. Busca leads
@@ -136,10 +137,15 @@ def executar_ciclo_sites(nicho=None, cidade=None, max_leads=None, callback=None)
 
     novos = []
     for lead in sem_site:
+        nome_lead  = lead.get("nome", "")
+        nicho_lead = lead.get("nicho", nicho)
+        if not empresa_vale_landing_page(nome_lead, nicho_lead):
+            log(f"⏭️  Pulando (não se beneficia de landing page): {nome_lead}")
+            continue
         if not db.lead_ja_contatado(email=lead.get("email"), telefone=lead.get("telefone")):
             novos.append(lead)
 
-    log(f"✅ {len(novos)} leads novos para contatar")
+    log(f"✅ {len(novos)} leads qualificados para contatar")
 
     for lead in novos[:max_leads]:
         nome     = lead["nome"]
@@ -160,17 +166,30 @@ def executar_ciclo_sites(nicho=None, cidade=None, max_leads=None, callback=None)
             fonte=lead.get("fonte"),
         )
 
+        log(f"🔍 Buscando logo de {nome}...")
+        logo = buscar_logo(nome, nicho, cid)
+        if logo:
+            log(f"🖼️  Logo encontrada para {nome}")
+        else:
+            log(f"📝 Logo nao encontrada — usando nome no mockup")
+
         log(f"🎨 Gerando mockup de landing page para {nome}...")
         try:
-            imagem_bytes = gerar_mockup_landing_page(nome, nicho, cid)
+            imagem_bytes = gerar_mockup_landing_page(nome, nicho, cid, logo_bytes=logo)
         except Exception as e:
             log(f"❌ Erro ao gerar mockup para {nome}: {e}")
             erros += 1
             db.registrar_campanha(prospect_id, "whatsapp", "erro", "", str(e))
             continue
 
-        mensagem = gerar_mensagem_oferta_site(nome, nicho, cid)
-        log(f"✍️  Mensagem de oferta gerada para {nome}")
+        if mensagem_custom and mensagem_custom.strip():
+            try:
+                mensagem = mensagem_custom.format(nome=nome)
+            except Exception:
+                mensagem = mensagem_custom
+        else:
+            mensagem = gerar_mensagem_oferta_site(nome, nicho, cid)
+        log(f"✍️  Mensagem gerada para {nome}")
 
         resultado = enviar_imagem_whatsapp(telefone, imagem_bytes, mensagem)
         if resultado["sucesso"]:

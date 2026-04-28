@@ -14,6 +14,8 @@ import threading
 from app import database as db
 from app.agent import executar_ciclo, executar_ciclo_sites
 from app.messaging.bulk_sender import disparar_em_massa, ler_planilha
+from app.messaging.followup import executar_followups
+from app.webhook import iniciar_webhook
 from app.scheduler import (
     iniciar_scheduler,
     parar_scheduler,
@@ -201,6 +203,7 @@ def render_logs(lines: list[str]) -> str:
 
 # ── Inicialização ────────────────────────────────────────────────────────────
 db.init_db()
+iniciar_webhook(porta=8082)
 
 for key, default in [
     ("scheduler_ativo", False),
@@ -285,6 +288,26 @@ with st.sidebar:
 
     cidade    = st.text_input("Cidade", value=settings.CIDADE_BUSCA, placeholder="ex: São Paulo (vazio = Brasil todo)")
     max_leads = st.slider("Leads por execução", 1, 100, settings.MAX_LEADS_POR_DIA)
+
+    st.divider()
+
+    # Mensagem padrão do mockup
+    st.markdown("**💬 Mensagem com o Mockup**")
+    _msg_default = (
+        "Olá, *{nome}*! Vi que vocês ainda não têm um site próprio.\n\n"
+        "Criei uma pré-visualização exclusiva de como ficaria o site de vocês — dá uma olhada! 👆\n\n"
+        "Um site profissional ajuda a aparecer no Google e atrair mais clientes. "
+        "Posso te contar mais sem compromisso? 😊"
+    )
+    mensagem_mockup = st.text_area(
+        "Mensagem",
+        value=st.session_state.get("mensagem_mockup", _msg_default),
+        height=160,
+        help="Use {nome} para personalizar com o nome da empresa",
+        label_visibility="collapsed",
+    )
+    st.session_state["mensagem_mockup"] = mensagem_mockup
+    st.caption("Use `{nome}` para personalizar com o nome da empresa")
 
     st.divider()
 
@@ -420,6 +443,7 @@ if executar and not st.session_state.rodando:
                 resultado = executar_ciclo_sites(
                     nicho=nicho, cidade=cidade, max_leads=max_leads,
                     callback=_callback,
+                    mensagem_custom=st.session_state.get("mensagem_mockup"),
                 )
                 result_container.success(
                     f"✅ Concluído! "
@@ -449,7 +473,7 @@ if executar and not st.session_state.rodando:
 st.write("")
 
 # ── Tabs de dados ─────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["📋  Prospects", "📊  Execuções", "📨  Disparos em Massa", "📝  Logs"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋  Prospects", "📊  Execuções", "📨  Disparos em Massa", "📈  Controle", "📝  Logs"])
 
 with tab1:
     if stats["prospects"]:
@@ -529,19 +553,70 @@ with tab3:
     </div>
     """, unsafe_allow_html=True)
 
-    # Upload da planilha
+    # ── SEÇÃO 1: Mensagem Padrão ──────────────────────────────────────────────
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#0f1a2e,#131f36);border:1px solid #1e3a5f;
+                border-left:3px solid #4f8ef7;border-radius:10px;padding:14px 18px;margin-bottom:16px;">
+        <div style="color:#90b8f8;font-weight:700;font-size:1rem;margin-bottom:4px">
+            💬 Mensagem Padrão
+        </div>
+        <div style="color:#6b8ab8;font-size:0.83rem">
+            Escreva aqui a mensagem que será enviada para todos os contatos.
+            Use <code style="background:#1e3a5f;padding:1px 5px;border-radius:3px">{nome}</code>
+            para personalizar com o nome de cada contato.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    bulk_mensagem = st.text_area(
+        "mensagem_disparo",
+        value=st.session_state.get("bulk_mensagem_salva",
+            "Olá, {nome}! Tudo bem?\n\n"
+            "Vi que você pode se interessar pelo que temos a oferecer.\n\n"
+            "Posso te contar mais? 😊"
+        ),
+        height=180,
+        placeholder="Escreva a mensagem aqui. Use {nome}, {cidade}, etc. para personalizar com os dados da planilha.",
+        label_visibility="collapsed",
+    )
+    st.session_state["bulk_mensagem_salva"] = bulk_mensagem
+
+    # Preview rápido da mensagem
+    _preview_nome = "João Silva"
+    try:
+        _preview_txt = bulk_mensagem.format(nome=_preview_nome, cidade="São Paulo", empresa=_preview_nome)
+    except Exception:
+        _preview_txt = bulk_mensagem
+
+    with st.expander("Ver preview da mensagem", expanded=False):
+        st.markdown(
+            f'<div style="background:#080b10;border:1px solid #1e2433;border-radius:10px;'
+            f'padding:14px 18px;font-family:monospace;color:#c8cfe0;white-space:pre-wrap;font-size:0.9rem;">'
+            f'{_preview_txt}</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.divider()
+
+    # ── SEÇÃO 2: Lista de Contatos ────────────────────────────────────────────
+    st.markdown("""
+    <div style="color:#90b8f8;font-weight:700;font-size:1rem;margin-bottom:10px">
+        📂 Lista de Contatos
+    </div>
+    """, unsafe_allow_html=True)
+
     col_up, col_info_up = st.columns([2, 3])
     with col_up:
         arquivo = st.file_uploader(
-            "Lista de contatos (Excel ou CSV)",
+            "Importar planilha",
             type=["xlsx", "xls", "csv"],
-            help="Planilha com colunas: Telefone (obrigatório), Nome (opcional), e outros campos para personalização",
+            help="Planilha com colunas: Telefone (obrigatório), Nome (opcional)",
         )
     with col_info_up:
         st.markdown("""
         <div class="info-banner" style="margin-top:28px">
-        Formato esperado: coluna <strong>Telefone</strong> (obrigatória) + <strong>Nome</strong> (opcional).<br>
-        Outros campos podem ser usados na mensagem como <code>{campo}</code>.
+        Formato: coluna <strong>Telefone</strong> (obrigatória) + <strong>Nome</strong> (opcional).<br>
+        Outros campos da planilha podem ser usados como <code>{campo}</code> na mensagem.
         </div>
         """, unsafe_allow_html=True)
 
@@ -559,26 +634,11 @@ with tab3:
 
         st.caption(f"{len(contatos_bulk)} contatos carregados | Colunas: {', '.join(colunas_bulk)}")
 
-        # Preview dos primeiros contatos
-        with st.expander("Pré-visualização da planilha", expanded=False):
+        with st.expander("Pre-visualizacao da planilha", expanded=False):
             import pandas as _pd
             st.dataframe(_pd.DataFrame(contatos_bulk[:10]), use_container_width=True, height=220)
 
         st.divider()
-
-        # Mensagem template
-        st.markdown("**Mensagem padrão**")
-        _variaveis_hint = "  ".join([f"`{{{c.lower()}}}`" for c in colunas_bulk])
-        st.caption(f"Variáveis disponíveis: {_variaveis_hint}")
-
-        bulk_mensagem = st.text_area(
-            "Mensagem",
-            value=st.session_state.get("bulk_mensagem_salva", "Olá, {nome}! Tudo bem?\n\nVi que você pode se interessar por..."),
-            height=140,
-            placeholder="Use {nome}, {cidade}, etc. para personalizar",
-            label_visibility="collapsed",
-        )
-        st.session_state["bulk_mensagem_salva"] = bulk_mensagem
 
         # Preview da mensagem com primeiro contato
         if contatos_bulk and bulk_mensagem.strip():
@@ -723,6 +783,147 @@ with tab3:
 
 
 with tab4:
+    # ── Controle & Métricas ───────────────────────────────────────────────────
+    pl_stats   = db.get_pipeline_stats()
+    pl_dados   = db.get_pipeline_completo()
+    contagens  = pl_stats["contagens"]
+
+    # Cards de métricas
+    mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
+    mc1.metric("Prospectados",  contagens.get("contatado",   0))
+    mc2.metric("Responderam",   contagens.get("respondeu",   0), f"{pl_stats['taxa_resposta']}%")
+    mc3.metric("Interessados",  contagens.get("interessado", 0))
+    mc4.metric("Negociando",    contagens.get("negociando",  0))
+    mc5.metric("Fechados",      contagens.get("fechou",      0))
+    mc6.metric("Perdidos",      contagens.get("perdeu",      0))
+
+    st.write("")
+
+    # Funil + receita lado a lado
+    col_funil, col_receita = st.columns([3, 2])
+
+    with col_funil:
+        st.markdown("**Funil de Vendas**")
+        _labels  = ["Prospectados", "Responderam", "Interessados", "Negociando", "Fechados"]
+        _valores = [
+            contagens.get("contatado",   0),
+            contagens.get("respondeu",   0),
+            contagens.get("interessado", 0),
+            contagens.get("negociando",  0),
+            contagens.get("fechou",      0),
+        ]
+        _cores = ["#4f8ef7", "#a78bfa", "#fbbf24", "#f97316", "#00d4aa"]
+
+        if any(v > 0 for v in _valores):
+            fig_funil = go.Figure(go.Funnel(
+                y=_labels, x=_valores,
+                textinfo="value+percent initial",
+                marker=dict(color=_cores),
+                connector=dict(line=dict(color="#1e2433", width=1)),
+            ))
+            fig_funil.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=0, t=10, b=0),
+                height=280,
+                font=dict(color="#c8cfe0"),
+            )
+            st.plotly_chart(fig_funil, use_container_width=True)
+        else:
+            st.markdown('<div class="empty-state"><div class="icon">📊</div>Sem dados ainda.</div>',
+                        unsafe_allow_html=True)
+
+    with col_receita:
+        st.markdown("**Receita**")
+        receita_pipe   = pl_stats["receita_pipeline"]
+        receita_fechada = pl_stats["receita_fechada"]
+
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#0f1a2e,#131f36);border:1px solid #1e3a5f;
+                    border-radius:12px;padding:20px 24px;margin-bottom:12px;">
+            <div style="color:#8892a4;font-size:0.78rem;text-transform:uppercase;letter-spacing:.08em">
+                Em Pipeline</div>
+            <div style="color:#fbbf24;font-size:2rem;font-weight:700">
+                R$ {receita_pipe:,.0f}</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#0a1f15,#0f2a1a);border:1px solid #1a4a2e;
+                    border-radius:12px;padding:20px 24px;">
+            <div style="color:#8892a4;font-size:0.78rem;text-transform:uppercase;letter-spacing:.08em">
+                Receita Fechada</div>
+            <div style="color:#00d4aa;font-size:2rem;font-weight:700">
+                R$ {receita_fechada:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Taxa de conversão
+        total = sum(contagens.values())
+        fechados = contagens.get("fechou", 0)
+        taxa_conv = round(fechados / total * 100, 1) if total > 0 else 0
+        st.markdown(f"""
+        <div style="background:#13172a;border:1px solid #252d45;border-radius:12px;
+                    padding:14px 24px;margin-top:12px;text-align:center">
+            <div style="color:#8892a4;font-size:0.78rem;text-transform:uppercase">Taxa de Conversão</div>
+            <div style="color:#e8eaf0;font-size:1.6rem;font-weight:700">{taxa_conv}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # Tabela de pipeline com atualização de status
+    st.markdown("**Pipeline de Negócios**")
+
+    if pl_dados:
+        _status_ops = ["contatado", "respondeu", "interessado", "negociando", "fechou", "perdeu"]
+        _icones = {"contatado":"🔵","respondeu":"🟣","interessado":"🟡",
+                   "negociando":"🟠","fechou":"🟢","perdeu":"🔴"}
+
+        for lead in pl_dados:
+            pid    = lead["id"]
+            nome   = lead["nome"]
+            status = lead["status"]
+            tel    = lead["telefone"] or "—"
+            nicho  = lead["nicho"]    or "—"
+            valor  = lead["valor_estimado"] or 0
+
+            cor = db.PIPELINE_CORES.get(status, "#4f8ef7")
+            icone = _icones.get(status, "⚪")
+
+            with st.expander(f"{icone} {nome}  ·  {nicho}  ·  {tel}", expanded=False):
+                ec1, ec2, ec3 = st.columns([2, 2, 2])
+
+                with ec1:
+                    novo_status = st.selectbox(
+                        "Status", _status_ops,
+                        index=_status_ops.index(status),
+                        key=f"status_{pid}",
+                    )
+                with ec2:
+                    novo_valor = st.number_input(
+                        "Valor estimado (R$)", min_value=0.0,
+                        value=float(valor), step=100.0,
+                        key=f"valor_{pid}",
+                    )
+                with ec3:
+                    obs = st.text_input(
+                        "Observação", value=lead.get("observacoes") or "",
+                        key=f"obs_{pid}",
+                    )
+
+                if st.button("Salvar", key=f"salvar_{pid}", type="primary"):
+                    db.atualizar_pipeline(pid, novo_status, obs or None, novo_valor)
+                    st.success("Atualizado!")
+                    st.rerun()
+    else:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="icon">🎯</div>
+            <div>Nenhum negócio no pipeline ainda.<br>Execute o agente para começar a prospectar.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+with tab5:
     col_log_hdr, col_log_btn = st.columns([4, 1])
     with col_log_hdr:
         st.caption(f"{len(st.session_state.logs)} entradas")
