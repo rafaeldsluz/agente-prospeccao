@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("agente.core")
 
 
-def executar_ciclo(nicho=None, cidade=None, max_leads=None, canal=None, callback=None) -> dict:
+def executar_ciclo(nicho=None, cidade=None, max_leads=None, canal="whatsapp", callback=None) -> dict:
     """
     Executa um ciclo completo de prospecção.
     callback(msg): função opcional para log em tempo real na UI.
@@ -62,7 +62,7 @@ def executar_ciclo(nicho=None, cidade=None, max_leads=None, canal=None, callback
         nome = lead["nome"]
         telefone = lead.get("telefone")
 
-        if canal == "whatsapp" and not telefone:
+        if not telefone:
             log(f"⚠️  Sem telefone para {nome}, pulando")
             continue
 
@@ -79,19 +79,15 @@ def executar_ciclo(nicho=None, cidade=None, max_leads=None, canal=None, callback
         mensagem = gerar_mensagem_whatsapp(nome, nicho, cidade)
         log(f"✍️  Mensagem gerada para {nome}")
 
-        if canal == "whatsapp":
-            resultado = enviar_whatsapp(telefone, mensagem)
-            if resultado["sucesso"]:
-                db.registrar_campanha(prospect_id, "whatsapp", "enviado", mensagem)
-                log(f"📤 WhatsApp enviado → {nome} ({telefone})")
-                enviados += 1
-            else:
-                db.registrar_campanha(prospect_id, "whatsapp", "erro", mensagem, resultado["erro"])
-                log(f"❌ Falha → {nome}: {resultado['erro']}")
-                erros += 1
+        resultado = enviar_whatsapp(telefone, mensagem)
+        if resultado["sucesso"]:
+            db.registrar_campanha(prospect_id, "whatsapp", "enviado", mensagem)
+            log(f"📤 WhatsApp enviado → {nome} ({telefone})")
+            enviados += 1
         else:
-            db.registrar_campanha(prospect_id, canal, "pendente", mensagem)
-            log(f"💾 Salvo como pendente → {nome}")
+            db.registrar_campanha(prospect_id, "whatsapp", "erro", mensagem, resultado["erro"])
+            log(f"❌ Falha → {nome}: {resultado['erro']}")
+            erros += 1
 
         time.sleep(3)  # Delay anti-spam entre envios
 
