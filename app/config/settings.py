@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 EMAIL_REMETENTE = os.getenv("EMAIL_REMETENTE", "")
 EMAIL_SENHA_APP = os.getenv("EMAIL_SENHA_APP", "")
 EMAIL_NOME_REMETENTE = os.getenv("EMAIL_NOME_REMETENTE", "Agente IA")

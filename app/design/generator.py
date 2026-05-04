@@ -1,10 +1,10 @@
 """
-Gerador de mensagens personalizadas via Claude AI.
+Gerador de mensagens personalizadas via DeepSeek AI.
 Cria textos persuasivos e únicos para cada prospect.
 """
 import logging
-import anthropic
-from app.config.settings import ANTHROPIC_API_KEY
+from openai import OpenAI
+from app.config.settings import DEEPSEEK_API_KEY
 
 logger = logging.getLogger("agente.design")
 
@@ -14,7 +14,7 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        _client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
     return _client
 
 
@@ -31,8 +31,8 @@ Sua tarefa é criar mensagens de prospecção via WhatsApp que:
 
 
 def gerar_mensagem_whatsapp(nome: str, nicho: str, cidade: str, servico_ofertado: str = None) -> str:
-    """Gera mensagem personalizada para WhatsApp via Claude."""
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "sua_chave_aqui":
+    """Gera mensagem personalizada para WhatsApp via DeepSeek."""
+    if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == "sua_chave_aqui":
         return _mensagem_template(nome, nicho, cidade, servico_ofertado)
 
     servico = servico_ofertado or "presença digital e captação de clientes online"
@@ -50,23 +50,25 @@ Retorne APENAS o texto da mensagem, sem explicações adicionais.
 
     try:
         client = _get_client()
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
             max_tokens=400,
-            system=PROMPT_SISTEMA,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": PROMPT_SISTEMA},
+                {"role": "user", "content": prompt},
+            ],
         )
-        mensagem = resp.content[0].text.strip()
-        logger.info(f"Mensagem gerada via Claude para: {nome}")
+        mensagem = resp.choices[0].message.content.strip()
+        logger.info(f"Mensagem gerada via DeepSeek para: {nome}")
         return mensagem
     except Exception as e:
-        logger.warning(f"Claude indisponível ({e}), usando template padrão")
+        logger.warning(f"DeepSeek indisponível ({e}), usando template padrão")
         return _mensagem_template(nome, nicho, cidade, servico_ofertado)
 
 
 def gerar_mensagem_followup(nome: str, nicho: str, cidade: str, numero: int = 1) -> str:
     """Gera mensagem de follow-up (1 ou 2) para empresa sem resposta."""
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "sua_chave_aqui":
+    if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == "sua_chave_aqui":
         return _template_followup(nome, nicho, cidade, numero)
 
     angulos = {
@@ -90,15 +92,17 @@ Máximo 3 linhas. Retorne APENAS o texto da mensagem.
 """
     try:
         client = _get_client()
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
             max_tokens=300,
-            system=PROMPT_SISTEMA,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": PROMPT_SISTEMA},
+                {"role": "user", "content": prompt},
+            ],
         )
-        return resp.content[0].text.strip()
+        return resp.choices[0].message.content.strip()
     except Exception as e:
-        logger.warning(f"Claude indisponível para follow-up ({e})")
+        logger.warning(f"DeepSeek indisponível para follow-up ({e})")
         return _template_followup(nome, nicho, cidade, numero)
 
 
@@ -118,7 +122,7 @@ def _template_followup(nome: str, nicho: str, cidade: str, numero: int) -> str:
 
 def gerar_mensagem_oferta_site(nome: str, nicho: str, cidade: str) -> str:
     """Gera mensagem de oferta de criação de site para empresa sem website."""
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "sua_chave_aqui":
+    if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == "sua_chave_aqui":
         return _mensagem_template_site(nome, nicho, cidade)
 
     prompt = f"""
@@ -143,15 +147,17 @@ Retorne APENAS o texto da mensagem, sem explicações.
 
     try:
         client = _get_client()
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
             max_tokens=350,
-            system=PROMPT_SISTEMA,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": PROMPT_SISTEMA},
+                {"role": "user", "content": prompt},
+            ],
         )
-        return resp.content[0].text.strip()
+        return resp.choices[0].message.content.strip()
     except Exception as e:
-        logger.warning(f"Claude indisponível ({e}), usando template de site")
+        logger.warning(f"DeepSeek indisponível ({e}), usando template de site")
         return _mensagem_template_site(nome, nicho, cidade)
 
 
@@ -175,7 +181,7 @@ def _mensagem_template_site(nome: str, nicho: str, cidade: str) -> str:
 
 
 def _mensagem_template(nome: str, nicho: str, cidade: str, servico: str = None) -> str:
-    """Fallback com templates rotativos quando Claude não está disponível."""
+    """Fallback com templates rotativos quando DeepSeek não está disponível."""
     servico = servico or "sua presença digital"
     templates = [
         f"Olá! Vi que vocês do *{nome}* são referência em {nicho} aqui em {cidade}. "
